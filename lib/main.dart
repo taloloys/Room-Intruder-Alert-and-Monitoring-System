@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://vkoeusxmagkkfqrfcuqo.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrb2V1c3htYWdra2ZxcmZjdXFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg3Mjg3NzUsImV4cCI6MjA2NDMwNDc3NX0.LTEG5xAQ4C4xayjcuwG1DZEO1DOvgAL2XQhHD7ANhik',
+  );
+
   runApp(const MyApp());
 }
 
@@ -10,11 +20,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'TresMongos',
       theme: ThemeData(
         colorScheme: ColorScheme.dark(
           primary: Colors.black,
-          secondary: const Color(0xFFFFD700), // Golden yellow
+          secondary: const Color(0xFFFFD700),
           surface: Colors.black,
           background: Colors.black,
           error: Colors.red,
@@ -70,7 +81,7 @@ class IntroPage extends StatelessWidget {
             const Text(
               'Created by Mongosers',
               style: TextStyle(
-                color: Color(0xFFFFD700), // Golden yellow
+                color: Color(0xFFFFD700),
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -79,13 +90,11 @@ class IntroPage extends StatelessWidget {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const MyHomePage(title: 'TresMongos'),
-                  ),
+                  MaterialPageRoute(builder: (context) => const HomePage()),
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFD700), // Golden yellow
+                backgroundColor: const Color(0xFFFFD700),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 45,
                   vertical: 15,
@@ -110,88 +119,372 @@ class IntroPage extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _HomePageState extends State<HomePage> {
+  List<Map<String, dynamic>> _items = [];
+  bool _loading = true;
+  String _selectedSensor = 'photosensitive';
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  final List<Map<String, String>> _sensorTypes = [
+    {'value': 'photosensitive', 'label': 'Photosensitive '},
+    {'value': 'pir', 'label': 'Motion '},
+    {'value': 'ultrasonic', 'label': 'Ultrasonic '},
+  ];
+
+  final List<Map<String, String>> _states = [
+    {'value': 'dark', 'label': 'Dark'},
+    {'value': 'bright', 'label': 'Bright'},
+    {'value': 'no_motion', 'label': 'No Motion'},
+    {'value': 'motion', 'label': 'Motion'},
+    {'value': 'open', 'label': 'Open'},
+    {'value': 'close', 'label': 'Close'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItems();
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('sensor_logs')
+          .select()
+          .eq('sensor_type', _selectedSensor)
+          .order('timestamp', ascending: false)
+          .limit(10);
+
+      setState(() {
+        _items = List<Map<String, dynamic>>.from(response);
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading items: $e')));
+      }
+    }
+  }
+
+  String formatTimestamp(String timestamp) {
+    try {
+      final dateTime = DateTime.parse(timestamp);
+      return DateFormat(
+        'hh:mm:ss a',
+      ).format(dateTime); // 12-hour format with AM/PM
+    } catch (e) {
+      return timestamp;
+    }
+  }
+
+  Color getStateColor(String state) {
+    switch (state.toLowerCase()) {
+      case 'dark':
+        return Colors.grey;
+      case 'bright':
+        return Colors.yellow;
+      case 'no_motion':
+        return Colors.green;
+      case 'motion':
+        return Colors.red;
+      case 'open':
+        return Colors.orange;
+      case 'close':
+        return Colors.blue;
+      default:
+        return Colors.white;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenWidth < 360;
+    final fontSize = screenWidth * 0.04; // Responsive font size
+    final padding = screenWidth * 0.04; // Responsive padding
+
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
         backgroundColor: Theme.of(context).colorScheme.primary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: Text('Sensor Logs', style: TextStyle(fontSize: fontSize * 1.1)),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFFFD700)),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadItems,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(padding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      margin: EdgeInsets.only(bottom: padding),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: padding,
+                        vertical: padding * 0.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2d2d2d),
+                        borderRadius: BorderRadius.circular(padding * 0.75),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Select Sensor: ',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: fontSize,
+                            ),
+                          ),
+                          SizedBox(width: padding * 0.75),
+                          Expanded(
+                            child: Theme(
+                              data: Theme.of(context).copyWith(
+                                textTheme: TextTheme(
+                                  titleMedium: TextStyle(
+                                    fontSize: fontSize,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              child: DropdownButton<String>(
+                                value: _selectedSensor,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF2d2d2d),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: fontSize,
+                                ),
+                                underline: Container(
+                                  height: 2,
+                                  color: const Color(0xFFFFD700),
+                                ),
+                                onChanged: (String? newValue) {
+                                  if (newValue != null) {
+                                    setState(() {
+                                      _selectedSensor = newValue;
+                                      _loading = true;
+                                    });
+                                    _loadItems();
+                                  }
+                                },
+                                items: _sensorTypes
+                                    .map<DropdownMenuItem<String>>((
+                                      Map<String, String> sensor,
+                                    ) {
+                                      return DropdownMenuItem<String>(
+                                        value: sensor['value'],
+                                        child: Text(sensor['label']!),
+                                      );
+                                    })
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: padding),
+                      child: Text(
+                        'Recent 10 Logs',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: fontSize * 1.1,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: screenWidth - (padding * 2),
+                        ),
+                        child: Table(
+                          border: TableBorder.all(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(padding * 0.5),
+                          ),
+                          columnWidths: {
+                            0: FixedColumnWidth(
+                              screenWidth * 0.35,
+                            ), // Sensor Type
+                            1: FixedColumnWidth(screenWidth * 0.25), // State
+                            2: FixedColumnWidth(
+                              screenWidth * 0.25,
+                            ), // Timestamp
+                          },
+                          children: [
+                            TableRow(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2d2d2d),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: Radius.circular(padding * 0.5),
+                                  topRight: Radius.circular(padding * 0.5),
+                                ),
+                              ),
+                              children: [
+                                TableCell(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(padding * 0.75),
+                                    child: Text(
+                                      'Sensor Type',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: fontSize,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                TableCell(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(padding * 0.75),
+                                    child: Text(
+                                      'State',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: fontSize,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                TableCell(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(padding * 0.75),
+                                    child: Text(
+                                      'Timestamp',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: fontSize,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            ..._items.map(
+                              (item) => TableRow(
+                                decoration: BoxDecoration(color: Colors.black),
+                                children: [
+                                  TableCell(
+                                    verticalAlignment:
+                                        TableCellVerticalAlignment.middle,
+                                    child: Padding(
+                                      padding: EdgeInsets.all(padding * 0.75),
+                                      child: Text(
+                                        _sensorTypes.firstWhere(
+                                          (sensor) =>
+                                              sensor['value'] ==
+                                              item['sensor_type'],
+                                          orElse: () => {
+                                            'value': '',
+                                            'label': 'Unknown',
+                                          },
+                                        )['label']!,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: isSmallScreen
+                                              ? fontSize * 0.9
+                                              : fontSize,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                  TableCell(
+                                    verticalAlignment:
+                                        TableCellVerticalAlignment.middle,
+                                    child: Padding(
+                                      padding: EdgeInsets.all(padding * 0.75),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            width: fontSize * 0.8,
+                                            height: fontSize * 0.8,
+                                            decoration: BoxDecoration(
+                                              color: getStateColor(
+                                                item['state'] ?? '',
+                                              ),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            margin: EdgeInsets.only(
+                                              right: padding * 0.5,
+                                            ),
+                                          ),
+                                          Flexible(
+                                            child: Text(
+                                              _states.firstWhere(
+                                                (state) =>
+                                                    state['value'] ==
+                                                    item['state'],
+                                                orElse: () => {
+                                                  'value': '',
+                                                  'label': 'Unknown',
+                                                },
+                                              )['label']!,
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: isSmallScreen
+                                                    ? fontSize * 0.9
+                                                    : fontSize,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  TableCell(
+                                    verticalAlignment:
+                                        TableCellVerticalAlignment.middle,
+                                    child: Padding(
+                                      padding: EdgeInsets.all(padding * 0.75),
+                                      child: Text(
+                                        formatTimestamp(
+                                          item['timestamp'] ?? '',
+                                        ),
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: isSmallScreen
+                                              ? fontSize * 0.9
+                                              : fontSize,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
