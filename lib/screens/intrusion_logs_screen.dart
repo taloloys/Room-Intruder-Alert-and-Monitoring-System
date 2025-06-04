@@ -3,7 +3,8 @@ import '../services/supabase_service.dart';
 import 'package:intl/intl.dart';
 
 class IntrusionLogsScreen extends StatefulWidget {
-  const IntrusionLogsScreen({super.key});
+  final bool autoRefresh;
+  const IntrusionLogsScreen({super.key, this.autoRefresh = false});
 
   @override
   State<IntrusionLogsScreen> createState() => _IntrusionLogsScreenState();
@@ -13,6 +14,7 @@ class _IntrusionLogsScreenState extends State<IntrusionLogsScreen> {
   final SupabaseService _supabaseService = SupabaseService();
   List<Map<String, dynamic>> _intrusionLogs = [];
   bool _isLoading = true;
+  static const int _maxLogs = 10; // Added constant for max logs
 
   // Add filter variables
   DateTime? _startDate;
@@ -41,7 +43,7 @@ class _IntrusionLogsScreenState extends State<IntrusionLogsScreen> {
   }
 
   List<Map<String, dynamic>> _filterLogs(List<Map<String, dynamic>> logs) {
-    return logs.where((log) {
+    var filteredLogs = logs.where((log) {
       final DateTime timestamp = DateTime.parse(log['timestamp'] as String);
       bool matchesDateRange = true;
       bool matchesSensorType = true;
@@ -63,9 +65,19 @@ class _IntrusionLogsScreenState extends State<IntrusionLogsScreen> {
 
       return matchesDateRange && matchesSensorType;
     }).toList();
+
+    // Sort logs by timestamp in descending order (newest first)
+    filteredLogs.sort(
+      (a, b) => DateTime.parse(
+        b['timestamp'] as String,
+      ).compareTo(DateTime.parse(a['timestamp'] as String)),
+    );
+
+    // Limit to max logs
+    return filteredLogs.take(_maxLogs).toList();
   }
 
-  // Add this method to convert UTC to Manila time
+  // Rest of the code remains the same...
   String formatTimestamp(String timestamp) {
     final utcTime = DateTime.parse(timestamp);
     final manilaTime = utcTime.add(
@@ -247,7 +259,6 @@ class _IntrusionLogsScreenState extends State<IntrusionLogsScreen> {
     }
   }
 
-  // Update the date picker to use Manila timezone
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
     final DateTime now = DateTime.now();
     final DateTime manilaTime = now.add(const Duration(hours: 8));

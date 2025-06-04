@@ -15,7 +15,7 @@ class _IntroScreenState extends State<IntroScreen> {
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const DashboardPage()),
+          MaterialPageRoute(builder: (context) => const DashboardScreen()),
         );
       }
     });
